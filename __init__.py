@@ -2,7 +2,6 @@ import os
 import sys
 import glob
 import importlib.util
-from server import PromptServer
 
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
