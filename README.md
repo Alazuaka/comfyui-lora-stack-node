@@ -1,4 +1,4 @@
-# ES_nodes by Alazuka
+# ES_nodes for ComfyUI by Alazuka
 
 ## 📦 Nodes ENG
 
