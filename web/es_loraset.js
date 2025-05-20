@@ -57,17 +57,81 @@ app.registerExtension({
       }
     };
     const saveAndMark = () => {
-      const jsonStr = JSON.stringify(lorasData, null, 2);
+      const cleanLorasData = lorasData.map(entry => {
+        if (
+          !entry.path ||
+          entry.path === "none" ||
+          entry.path.startsWith("───")
+        ) {
+          return { ...entry, path: "" }; // или можно `null`
+        }
+        return entry;
+      });
+
+      const jsonStr = JSON.stringify(cleanLorasData, null, 2);
       node.widgets[0].value = jsonStr;
+
       if (typeof node.widgets[0].onChange === "function") {
         node.widgets[0].onChange(jsonStr);
       }
+
       app.graph.setDirtyCanvas(true, true);
       node.setDirtyCanvas(true, true);
+    };
+
+
+    async function buildGroupedLoraList() {
+      const paths = await getLorasPath();
+      const grouped = {}; // { base_model: [path1, path2, ...] }
+
+      for (const path of paths) {
+        if (!path.endsWith(".safetensors")) continue;
+
+        const jsonPath = path.replace(/\.safetensors$/, ".cm-info.json");
+
+        try {
+          const response = await api.fetchApi(`/esprev/file/loras/${jsonPath}`);
+          if (!response.ok) throw new Error();
+
+          const json = await response.json();
+
+          let modelGroup = "Unknown";
+          if (json && typeof json.BaseModel === "string" && json.BaseModel.trim() !== "") {
+            modelGroup = json.BaseModel.trim();
+          } else {
+            console.warn(`🔶 base_model отсутствует или не строка в: ${jsonPath}`);
+          }
+
+          if (!grouped[modelGroup]) grouped[modelGroup] = [];
+          grouped[modelGroup].push(path);
+
+        } catch (err) {
+          console.warn(`⚠️ Не удалось загрузить ${jsonPath}:`, err);
+          if (!grouped.Unknown) grouped.Unknown = [];
+          grouped.Unknown.push(path);
+        }
+      }
+
+      // Собираем финальный отсортированный массив
+      const sortedKeys = Object.keys(grouped).sort((a, b) => {
+        if (a === "Unknown") return 1; // отправляем Unknown в конец
+        if (b === "Unknown") return -1;
+        return a.localeCompare(b);
+      });
+
+      const finalList = ["none"];
+
+      for (const key of sortedKeys) {
+        finalList.push(`─── ${key} ───`);
+        finalList.push(...grouped[key]);
+      }
+
+      return finalList;
     }
 
+
     // Получаем список доступных LoRA файлов
-    const loraList = ["none", ...(await getLorasPath())];
+    const loraList = await buildGroupedLoraList();
 
     // Состояние
     let lorasData = [];

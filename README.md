@@ -1,4 +1,4 @@
-# ES Alazuka
+# ES_nodes by Alazuka
 
 ## 📦 Nodes ENG
 
