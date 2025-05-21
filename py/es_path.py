@@ -1,10 +1,10 @@
-# 📂 Структура маршрутов `/esprev/…`
+# 📂 Структура маршрутов `/alazuka/…`
 
 # | Endpoint | Метод | Назначение |
 # |----------|-------|------------|
-# | `/esprev/file/{type}/{filename}` | `GET` | Получить любой файл (json, image, model, etc) |
-# | `/esprev/related/{type}/{basename}` | `GET` | Получить связанные файлы (preview, json и др.) |
-# | `/esprev/savefile/{type}/{target}` | `POST` | Сохранить файл как превью или другой тип |
+# | `/alazuka/file/{type}/{filename}` | `GET` | Получить любой файл (json, image, model, etc) |
+# | `/alazuka/related/{type}/{basename}` | `GET` | Получить связанные файлы (preview, json и др.) |
+# | `/alazuka/savefile/{type}/{target}` | `POST` | Сохранить файл как превью или другой тип |
 
 
 import os
@@ -25,7 +25,7 @@ def find_related_file(base_path, extensions):
     return None
 
 
-@PromptServer.instance.routes.get("/esprev/file/{type}/{filename}")
+@PromptServer.instance.routes.get("/alazuka/file/{type}/{filename}")
 async def serve_file(request):
     type = request.match_info["type"]
     filename = request.match_info["filename"]
@@ -41,9 +41,9 @@ async def serve_file(request):
 
     return web.FileResponse(file_path)
 
-@PromptServer.instance.routes.get("/esprev/files/{type}")
+@PromptServer.instance.routes.get("/alazuka/files/{type}")
 async def get_grouped_files(request):
-    # Пример: /esprev/files/loras?ext=jpg,png,json,safetensors
+    # Пример: /alazuka/files/loras?ext=jpg,png,json,safetensors
 
     type = request.match_info["type"]
     # Получаем тип, например: 'loras'
@@ -108,7 +108,7 @@ async def get_grouped_files(request):
     #   }
     # }
 
-@PromptServer.instance.routes.post("/esprev/savefile/{type}/{target}")
+@PromptServer.instance.routes.post("/alazuka/savefile/{type}/{target}")
 async def save_file(request):
     type = request.match_info["type"]
     target = request.match_info["target"]
@@ -143,21 +143,21 @@ async def save_file(request):
 # const type = "loras";
 # const basename = "my_lora.safetensors";
 
-# const related = await (await fetch(`/esprev/related/${type}/${basename}`)).json();
+# const related = await (await fetch(`/alazuka/related/${type}/${basename}`)).json();
 
-# console.log("Preview URL:", `/esprev/file/${related.preview}`);
-# console.log("JSON URL:", `/esprev/file/${related.json}`);
+# console.log("Preview URL:", `/alazuka/file/${related.preview}`);
+# console.log("JSON URL:", `/alazuka/file/${related.json}`);
 # ```
 
 # ### Получить содержимое JSON:
 # ```js
-# const jsonText = await (await fetch(`/esprev/file/loras/my_lora.json`)).json();
+# const jsonText = await (await fetch(`/alazuka/file/loras/my_lora.json`)).json();
 # console.log("TrainedWords:", jsonText.TrainedWords);
 # ```
 
 # ### Отправить preview:
 # ```js
-# await fetch(`/esprev/savefile/loras/my_lora.safetensors`, {
+# await fetch(`/alazuka/savefile/loras/my_lora.safetensors`, {
 #   method: "POST",
 #   headers: { "Content-Type": "application/json" },
 #   body: JSON.stringify({

@@ -1,3 +1,4 @@
 web/js.js
-__pycache__
-.pyc
+./__pycache__
+py/__pycache__
+*.pyc
