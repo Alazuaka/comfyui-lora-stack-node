@@ -19,7 +19,7 @@ class EsLoraSet:
     
     RETURN_TYPES = ("MODEL", "CLIP")
     FUNCTION = "apply_loras"
-    CATEGORY = "esprev"
+    CATEGORY = "alazuka"
 
     def apply_loras(self, model, clip, lora_config):
         try:

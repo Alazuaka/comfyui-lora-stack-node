@@ -4,7 +4,7 @@ import { app } from "../../../scripts/app.js";
 import { api } from "../../../scripts/api.js";
 
 app.registerExtension({
-  name: "esprev.EsLoraSet",
+  name: "alazuka.EsLoraSet",
   async nodeCreated(node) {
     if (node.comfyClass !== "EsLoraSet") return;
 
@@ -17,7 +17,6 @@ app.registerExtension({
         }
       }
     };
-
     node.computeSize = function (width) {
       // Авто-высота по количеству виджетов, но не меньше 80px
       const baseHeight = 20;
@@ -25,7 +24,6 @@ app.registerExtension({
       const totalHeight = baseHeight + (this.widgets?.length || 0) * widgetHeight;
       return [width ?? 200, Math.max(80, totalHeight)];
     };
-
     // Скрытие textarea для lora_config
     const hideTextarea = () => {
       const baseWidget = node.widgets[0];
@@ -78,8 +76,6 @@ app.registerExtension({
       app.graph.setDirtyCanvas(true, true);
       node.setDirtyCanvas(true, true);
     };
-
-
     async function buildGroupedLoraList() {
       const paths = await getLorasPath();
       const grouped = {}; // { base_model: [path1, path2, ...] }
@@ -90,7 +86,7 @@ app.registerExtension({
         const jsonPath = path.replace(/\.safetensors$/, ".cm-info.json");
 
         try {
-          const response = await api.fetchApi(`/esprev/file/loras/${jsonPath}`);
+          const response = await api.fetchApi(`/alazuka/file/loras/${jsonPath}`);
           if (!response.ok) throw new Error();
 
           const json = await response.json();
@@ -127,9 +123,7 @@ app.registerExtension({
       }
 
       return finalList;
-    }
-
-
+    };
     // Получаем список доступных LoRA файлов
     const loraList = await buildGroupedLoraList();
 
@@ -210,7 +204,7 @@ app.registerExtension({
       const jsonPath = entry.path.replace(/\.safetensors$/, ".cm-info.json");
 
       try {
-        const response = await api.fetchApi(`/esprev/file/loras/${jsonPath}`);
+        const response = await api.fetchApi(`/alazuka/file/loras/${jsonPath}`);
         if (!response.ok) throw new Error(`Ошибка загрузки ${jsonPath}: ${response.statusText}`);
 
         const json = await response.json();
@@ -506,7 +500,7 @@ app.registerExtension({
 });
 
 async function getLorasPath() {
-  const resp = await api.fetchApi("/esprev/files/loras?ext=safetensors");
+  const resp = await api.fetchApi("/alazuka/files/loras?ext=safetensors");
   const data = await resp.json();
   return Object.keys(data);
 }

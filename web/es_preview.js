@@ -30,7 +30,7 @@ function showImage(relativeToEl, imageEl) {
 async function loadAllImages() {
   for (const type of typesToWatch) {
     try {
-      const data = await (await api.fetchApi(`/esprev/files/${type}?ext=png,jpg,jpeg,preview.png,preview.jpeg`)).json();
+      const data = await (await api.fetchApi(`/alazuka/files/${type}?ext=png,jpg,jpeg,preview.png,preview.jpeg`)).json();
       imagesByType[type] = {};
       for (const [filename, files] of Object.entries(data)) {
         const base = filename.split(".")[0]; // ключ — имя LoRA без расширения
@@ -41,12 +41,12 @@ async function loadAllImages() {
         }
       }
     } catch (err) {
-      console.warn(`[esprev] Failed to load files for ${type}`, err);
+      console.warn(`[alazuka] Failed to load files for ${type}`, err);
       imagesByType[type] = {};
     }
   }
 
-  console.log("[esprev] Loaded previews:", imagesByType);
+  console.log("[alazuka] Loaded previews:", imagesByType);
 }
 
 function detectTypeByWidgetName(widgetName) {
@@ -66,7 +66,7 @@ function addPreviewHandlers(item, images, imageHost) {
   if (!previewPath) return;
 
   const show = () => {
-    imageHost.src = `/esprev/file/${previewPath}`;
+    imageHost.src = `/alazuka/file/${previewPath}`;
     showImage(item, imageHost);
   };
 
@@ -82,22 +82,22 @@ function addPreviewHandlers(item, images, imageHost) {
 }
 
 app.registerExtension({
-  name: "esprev.PreviewUniversal",
+  name: "alazuka.PreviewUniversal",
   async init() {
-    const imageHost = $el("img.esprev-combo-image");
+    const imageHost = $el("img.alazuka-combo-image");
 
     await loadAllImages();
 
     $el("style", {
       textContent: `
-        .esprev-combo-image {
+        .alazuka-combo-image {
           position: absolute;
           width: ${IMAGE_WIDTH}px;
           height: ${IMAGE_HEIGHT}px;
           object-fit: contain;
           z-index: 9999;
         }
-        .esprev-combo-image.left {
+        .alazuka-combo-image.left {
           object-position: top right;
         }
       `,

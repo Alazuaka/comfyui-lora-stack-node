@@ -7,13 +7,13 @@ NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
 
 def log(msg):
-    print(f"[esprev] {msg}")
+    print(f"[alazuka] {msg}")
 
 def get_ext_dir(*parts):
     return os.path.abspath(os.path.join(os.path.dirname(__file__), *parts))
 
 def init():
-    log("Initializing esprev...")
+    log("Initializing alazuka...")
 
     py_path = get_ext_dir("py")
     for file in glob.glob(os.path.join(py_path, "*.py")):
