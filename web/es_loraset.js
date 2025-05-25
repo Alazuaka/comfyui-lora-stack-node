@@ -17,6 +17,7 @@ app.registerExtension({
         }
       }
     };
+
     node.computeSize = function (width) {
       // Авто-высота по количеству виджетов, но не меньше 80px
       const baseHeight = 20;
@@ -24,6 +25,7 @@ app.registerExtension({
       const totalHeight = baseHeight + (this.widgets?.length || 0) * widgetHeight;
       return [width ?? 200, Math.max(80, totalHeight)];
     };
+
     // Скрытие textarea для lora_config
     const hideTextarea = () => {
       const baseWidget = node.widgets[0];
@@ -76,8 +78,11 @@ app.registerExtension({
       app.graph.setDirtyCanvas(true, true);
       node.setDirtyCanvas(true, true);
     };
+
+
     async function buildGroupedLoraList() {
       const paths = await getLorasPath();
+      console.log(paths)
       const grouped = {}; // { base_model: [path1, path2, ...] }
 
       for (const path of paths) {
@@ -86,7 +91,7 @@ app.registerExtension({
         const jsonPath = path.replace(/\.safetensors$/, ".cm-info.json");
 
         try {
-          const response = await api.fetchApi(`/alazuka/file/loras/${jsonPath}`);
+          const response = await fetch(`/alazuka/file/loras/${jsonPath}`);
           if (!response.ok) throw new Error();
 
           const json = await response.json();
@@ -123,7 +128,9 @@ app.registerExtension({
       }
 
       return finalList;
-    };
+    }
+
+
     // Получаем список доступных LoRA файлов
     const loraList = await buildGroupedLoraList();
 
@@ -195,7 +202,6 @@ app.registerExtension({
     }
 
     async function getTrainedWords(entry) {
-      let trainedWords = ""
       if (!entry?.path?.endsWith(".safetensors")) {
         console.warn("Неизвестный путь к LoRA:", entry?.path);
         return "";
@@ -204,16 +210,15 @@ app.registerExtension({
       const jsonPath = entry.path.replace(/\.safetensors$/, ".cm-info.json");
 
       try {
-        const response = await api.fetchApi(`/alazuka/file/loras/${jsonPath}`);
+        const response = await fetch(`/alazuka/file/loras/${jsonPath}`);
         if (!response.ok) throw new Error(`Ошибка загрузки ${jsonPath}: ${response.statusText}`);
 
         const json = await response.json();
 
         if (Array.isArray(json.TrainedWords)) {
-          json.TrainedWords.forEach((w) => {
-            trainedWords = `${trainedWords}${w},`
-          })
-          return trainedWords
+          console.log(json.TrainedWords)
+          const trainedWords = (json.TrainedWords).join(", ")
+          return trainedWords.trim();
         } else {
           console.warn(`🟡 В JSON нет поля "TrainedWords" — ${jsonPath}`)
         }
@@ -395,7 +400,7 @@ app.registerExtension({
                   const widget = widgets[0]; // берём первый текстовый виджет
                   const oldValue = widget.value;
                   if (!trigers) return
-                  const newValue = `${oldValue[oldValue.length - 1] === (",") ? oldValue : oldValue + ','} ${trigers}`
+                  const newValue = `${oldValue}${oldValue.trim()[oldValue.trim().length - 1] === "," ? "" : ","} ${trigers[trigers.length - 1] === "," ? trigers : trigers + ","}`
 
                   widget.value = trigers.length > 0 ? newValue : oldValue; // прямое изменение
 
@@ -460,7 +465,7 @@ app.registerExtension({
             let trigers = ''
             for (const el of lorasData) {
               const words = await getTrainedWords(el)
-              trigers += words
+              trigers = `${trigers[trigers.length - 1] === "," ? trigers : trigers + ","} ${words}`
             }
             searchNodeAndDoSomethingWithTheFoundNode(
               node,
@@ -470,8 +475,16 @@ app.registerExtension({
 
                 const widget = widgets[0]; // берём первый текстовый виджет
                 const oldValue = widget.value;
-                if (!trigers) return
-                const newValue = `${oldValue[oldValue.length - 1] === (",") ? oldValue : oldValue + ','} ${trigers}`
+
+                const trigKeys = trigers.split(",")
+                const trigersSet = [];
+                for (const trig of trigKeys) {
+                  if(!oldValue.includes(trig)) trigersSet.push(trig)
+                }
+              
+                const unicTrig = trigersSet.join(", ").trim()
+                if (!unicTrig) return
+                const newValue = `${oldValue[oldValue.length - 1] === (",") ? oldValue : oldValue + ','} ${unicTrig}`
 
                 widget.value = trigers.length > 0 ? newValue : oldValue; // прямое изменение
 
@@ -500,7 +513,10 @@ app.registerExtension({
 });
 
 async function getLorasPath() {
-  const resp = await api.fetchApi("/alazuka/files/loras?ext=safetensors");
+  const resp = await fetch("/alazuka/files/loras");
   const data = await resp.json();
-  return Object.keys(data);
+  const path = [];
+
+  Object.keys(data).forEach(el => path.push(`${el}.safetensors`));
+  return path
 }

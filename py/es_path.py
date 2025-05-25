@@ -25,6 +25,43 @@ def find_related_file(base_path, extensions):
     return None
 
 
+# Путь к файлу settings.json (родительская папка)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ALAZUKA_JSON_PATH = os.path.join(BASE_DIR, "settings.json")
+
+# POST - сохранить настройки
+@PromptServer.instance.routes.post("/alazuka/file/settings/post")
+async def save_settings(request):
+    data = await request.json()
+    if not isinstance(data, dict):
+        return web.json_response({"status": "error", "message": "Invalid data format, expected JSON object"}, status=400)
+
+    # Загружаем текущие настройки
+    if os.path.exists(ALAZUKA_JSON_PATH):
+        with open(ALAZUKA_JSON_PATH, "r", encoding="utf-8") as f:
+            settings = json.load(f)
+    else:
+        settings = {}
+
+    # Обновляем ключи из запроса
+    settings.update(data)
+
+    # Сохраняем обратно
+    with open(ALAZUKA_JSON_PATH, "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=4)
+
+    return web.json_response({"status": "success", "message": "Settings updated", "updated_keys": list(data.keys())})
+
+# GET - получить настройки
+@PromptServer.instance.routes.get("/alazuka/file/settings/get")
+async def get_settings(request):
+    if os.path.exists(ALAZUKA_JSON_PATH):
+        with open(ALAZUKA_JSON_PATH, "r", encoding="utf-8") as f:
+            settings = json.load(f)
+    else:
+        settings = {}
+    return web.json_response(settings)
+
 @PromptServer.instance.routes.get("/alazuka/file/{type}/{filename}")
 async def serve_file(request):
     type = request.match_info["type"]
@@ -43,127 +80,29 @@ async def serve_file(request):
 
 @PromptServer.instance.routes.get("/alazuka/files/{type}")
 async def get_grouped_files(request):
-    # Пример: /alazuka/files/loras?ext=jpg,png,json,safetensors
-
     type = request.match_info["type"]
-    # Получаем тип, например: 'loras'
-
-    query_exts = request.query.get("ext", "")
-    # Получаем параметр 'ext' из запроса: "jpg,png,json"
-
-    if not query_exts:
-        return web.Response(status=400, text="Missing 'ext' query parameter")
-        # Если нет параметра ext — ошибка 400
-
-    target_exts = [e.strip().lower() for e in query_exts.split(",") if e.strip()]
-    # Парсим расширения: ["jpg", "png", "json"]
-
-    if not target_exts:
-        return web.Response(status=400, text="Invalid 'ext' values")
-        # Если список пуст — ошибка 400
-
     folders = folder_paths.get_folder_paths(type)
-    # Получаем все папки, в которых могут быть файлы типа 'loras'
-
-    grouped = {}  # Соберём сюда результат
+    grouped = {}
 
     for folder in folders:
         if not os.path.isdir(folder):
-            continue  # Пропускаем, если не папка
+            continue
 
         for fname in os.listdir(folder):
-            base_name, ext = os.path.splitext(fname)
-            # fname: 'ahegao_v1.safetensors' => base_name: 'ahegao_v1', ext: '.safetensors'
+            parts = fname.split(".")
+            if len(parts) < 2:
+                continue  # Пропускаем файлы без расширений
 
-            full_base_path = os.path.join(folder, base_name)
-            # Полный путь без расширения, например: /path/to/loras/ahegao_v1
+            base_name = parts[0]  # Всё до первой точки
+            ext = parts[-1].lower()  # Всё после последней точки
 
-            found = {}
-            for t_ext in target_exts:
-                alt_path = f"{full_base_path}.{t_ext}"
-                # Пробуем: /path/to/loras/ahegao_v1.jpg (или .png/.json)
+            full_path = os.path.join(folder, fname)
+            if not os.path.isfile(full_path):
+                continue
 
-                if os.path.isfile(alt_path):
-                    # Если файл есть, добавляем его:
-                    found[t_ext] = f"{type}/{os.path.basename(alt_path)}"
-                    # Пример: "jpg": "loras/ahegao_v1.jpg"
+            if base_name not in grouped:
+                grouped[base_name] = {}
 
-            if found:
-                # Если найдено хотя бы одно сопутствующее расширение
-                grouped[fname] = found
-                # Ключ — оригинальный файл: "ahegao_v1.safetensors"
-                # Значение: { "jpg": "loras/ahegao_v1.jpg", ... }
-
-    print(web.json_response(grouped))  # Вывод в консоль для отладки
+            grouped[base_name][ext] = f"{type}/{fname}"
 
     return web.json_response(grouped)
-    # Возвращает JSON вида:
-    # {
-    #   "ahegao_v1.safetensors": {
-    #     "jpg": "loras/ahegao_v1.jpg",
-    #     "json": "loras/ahegao_v1.json"
-    #   },
-    #   "cool_style.ckpt": {
-    #     "preview.png": "checkpoints/cool_style.preview.png"
-    #   }
-    # }
-
-@PromptServer.instance.routes.post("/alazuka/savefile/{type}/{target}")
-async def save_file(request):
-    type = request.match_info["type"]
-    target = request.match_info["target"]
-
-    body = await request.json()
-    src_dir = get_directory_by_type(body.get("type", "output"))
-    subfolder = body.get("subfolder", "")
-    filename = body.get("filename", "")
-
-    src_path = os.path.join(src_dir, os.path.normpath(subfolder), filename)
-    dst_path = get_full_path(type, target)
-
-    if not dst_path:
-        folders = get_folder_paths(type)
-        if not folders:
-            return web.Response(status=400)
-        dst_path = os.path.join(folders[0], target)
-
-    dst_path = os.path.splitext(dst_path)[0] + os.path.splitext(src_path)[1]
-
-    if os.path.commonpath((src_dir, os.path.abspath(src_path))) != src_dir:
-        return web.Response(status=400)
-
-    shutil.copyfile(src_path, dst_path)
-    return web.json_response({"saved": f"{type}/{os.path.basename(dst_path)}"})
-
-
-## 🔌 Пример как вызывать из JS
-
-### Получить связанный preview + json:
-# ```js
-# const type = "loras";
-# const basename = "my_lora.safetensors";
-
-# const related = await (await fetch(`/alazuka/related/${type}/${basename}`)).json();
-
-# console.log("Preview URL:", `/alazuka/file/${related.preview}`);
-# console.log("JSON URL:", `/alazuka/file/${related.json}`);
-# ```
-
-# ### Получить содержимое JSON:
-# ```js
-# const jsonText = await (await fetch(`/alazuka/file/loras/my_lora.json`)).json();
-# console.log("TrainedWords:", jsonText.TrainedWords);
-# ```
-
-# ### Отправить preview:
-# ```js
-# await fetch(`/alazuka/savefile/loras/my_lora.safetensors`, {
-#   method: "POST",
-#   headers: { "Content-Type": "application/json" },
-#   body: JSON.stringify({
-#     type: "output",
-#     subfolder: "temp",
-#     filename: "preview.png"
-#   })
-# });
-# ```

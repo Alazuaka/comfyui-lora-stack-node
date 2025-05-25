@@ -1,10 +1,17 @@
 import { app } from "../../../scripts/app.js";
 import { $el } from "../../../scripts/ui.js";
 import { api } from "../../../scripts/api.js";
+import { loadSettingsFromServer } from "./alazuka.js";
 
-const IMAGE_WIDTH = 384;
-const IMAGE_HEIGHT = 384;
+const settings = await loadSettingsFromServer();
+const IMAGE_WIDTH = settings.preview['width']
+const IMAGE_HEIGHT = settings.preview['height']
+
+console.log(IMAGE_WIDTH)
+
 let imagesByType = {};
+const jsonCache = {};
+
 
 const typesToWatch = ["loras", "checkpoints", "vae"];
 
@@ -17,29 +24,35 @@ const calculateImagePosition = (el, bodyRect) => {
   return { left: Math.round(left), top: Math.round(top), isLeft: !isSpaceRight };
 };
 
-function showImage(relativeToEl, imageEl) {
+function showImage(relativeToEl, imageEl, blur = false) {
   const bodyRect = document.body.getBoundingClientRect();
   if (!bodyRect) return;
   const { left, top, isLeft } = calculateImagePosition(relativeToEl, bodyRect);
   imageEl.style.left = `${left}px`;
   imageEl.style.top = `${top}px`;
+  blur ? imageEl.style.filter = `blur(40px)` : imageEl.style.filter = `blur(0)`;
+
   imageEl.classList.toggle("left", isLeft);
+
   document.body.appendChild(imageEl);
 }
 
 async function loadAllImages() {
   for (const type of typesToWatch) {
     try {
-      const data = await (await api.fetchApi(`/alazuka/files/${type}?ext=png,jpg,jpeg,preview.png,preview.jpeg`)).json();
+      const data = await (await api.fetchApi(`/alazuka/files/${type}`)).json();
       imagesByType[type] = {};
-      for (const [filename, files] of Object.entries(data)) {
-        const base = filename.split(".")[0]; // ключ — имя LoRA без расширения
-        const preview =
-          files["preview.png"] || files["preview.jpeg"] || files["png"] || files["jpg"] || files["jpeg"];
-        if (preview) {
-          imagesByType[type][base] = preview; // сохраним ПОЛНЫЙ путь к превью
+      for (const key in data) {
+        if (Object.prototype.hasOwnProperty.call(data, key)) {
+
+          imagesByType[type][key] = {
+            model: data[key]['safetensors'],
+            info: data[key]['json'],
+            img: data[key]['png'] || data[key]['webp'] || data[key]['jpeg'] || data[key]['jpg'] || data[key]['png'],
+          }; // сохраним ПОЛНЫЕ пути к данным
         }
       }
+      console.log(imagesByType)
     } catch (err) {
       console.warn(`[alazuka] Failed to load files for ${type}`, err);
       imagesByType[type] = {};
@@ -56,18 +69,33 @@ function detectTypeByWidgetName(widgetName) {
   return null;
 }
 
-function addPreviewHandlers(item, images, imageHost) {
+async function addPreviewHandlers(item, images, imageHost) {
   const text = item.getAttribute("data-value")?.trim();
   if (!text) return;
 
   const baseName = text.split(".")[0]; // ключ = имя без расширения
 
-  const previewPath = images[baseName];
-  if (!previewPath) return;
+  const data = images[baseName];
+  if (!data) return;
+  const img = data['img']
+  let info = jsonCache[baseName] || null;
+  if (!info) {
+    try {
+      info = await (await fetch(`/alazuka/file/${data['info']}`)).json()
+      jsonCache[baseName] = info
+    }
+    catch (err) { console.warn(`[alazuka] Failed to load info for ${baseName}`, err) }
+  }
+
+  const showNSFW = (await loadSettingsFromServer()).NFSW;
 
   const show = () => {
-    imageHost.src = `/alazuka/file/${previewPath}`;
-    showImage(item, imageHost);
+    imageHost.src = `/alazuka/file/${img}`;
+    if (info.Nsfw && !showNSFW) {
+      showImage(item, imageHost, true);
+    } else {
+      showImage(item, imageHost, false);
+    }
   };
 
   const hide = () => {
@@ -94,6 +122,7 @@ app.registerExtension({
           position: absolute;
           width: ${IMAGE_WIDTH}px;
           height: ${IMAGE_HEIGHT}px;
+          overflow: hidden;
           object-fit: contain;
           z-index: 9999;
         }
