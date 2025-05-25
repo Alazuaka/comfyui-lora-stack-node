@@ -1,6 +1,29 @@
+import { app } from "../../../scripts/app.js";
+
+app.registerExtension({
+  name: "alazuka.EsCheckpointSet",
+  async nodeCreated(node) {
+    if (node.comfyClass !== "EsCheckpointSet") return;
+
+    const widget = node.widgets?.find(w => w.name === "ckpt_name");
+    if (!widget) return;
+
+    const values = await getGroupedCheckpoints();
+    widget.options.values = values;
+    widget.value = "none";
+
+    const cb = widget.callback;
+    widget.callback = (v) => {
+      widget.value = v.startsWith("──") ? "none" : v;
+      cb?.(widget.value);
+      app.graph.setDirtyCanvas(true);
+    };
+  }
+});
+
 async function getGroupedCheckpoints() {
   try {
-    const resp = await api.fetchApi("/alazuka/files/checkpoints");
+    const resp = await fetch("/alazuka/files/checkpoints");  // Исправлено с api.fetchApi на fetch
     if (!resp.ok) throw new Error(resp.statusText);
     const data = await resp.json();
 
@@ -9,9 +32,9 @@ async function getGroupedCheckpoints() {
     for (const [baseName, files] of Object.entries(data)) {
       if (!files.safetensors) continue;
 
-      const jsonKeys = Object.keys(files).filter(ext => ext.includes("json"));
+      // Группировка по BaseModel из json
       let baseModel = "Unknown";
-
+      const jsonKeys = Object.keys(files).filter(ext => ext.includes("json"));
       for (const key of jsonKeys) {
         try {
           const r = await fetch(`/alazuka/file/${files[key]}`);
@@ -21,19 +44,29 @@ async function getGroupedCheckpoints() {
             baseModel = j.BaseModel.trim();
             break;
           }
-        } catch {}
+        } catch (err) {
+          console.warn(`⚠️ Ошибка чтения JSON файла ${files[key]}:`, err);
+        }
       }
 
       if (!grouped[baseModel]) grouped[baseModel] = [];
-      // Используем полный путь
-      grouped[baseModel].push(files.safetensors);
+      grouped[baseModel].push(`${baseName}.safetensors`); // Добавляем путь целиком
     }
 
-    // Здесь оставляем полный путь в значениях
-    return ["none", ...Object.keys(grouped)
-      .sort((a, b) => (a === "Unknown") - (b === "Unknown") || a.localeCompare(b))
-      .flatMap(key => [`── ${key} ──`, ...grouped[key].sort()])];
+    const result = ["none"];
+    const sortedKeys = Object.keys(grouped)
+      .sort((a, b) => {
+        if (a === "Unknown") return 1;
+        if (b === "Unknown") return -1;
+        return a.localeCompare(b);
+      });
 
+    for (const key of sortedKeys) {
+      result.push(`── ${key} ──`);
+      result.push(...grouped[key].sort());
+    }
+
+    return result;
   } catch (e) {
     console.warn("⚠️ Ошибка загрузки или парсинга:", e);
     return ["none"];
