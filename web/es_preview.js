@@ -7,7 +7,7 @@ const IMAGE_WIDTH = settings.preview['width']
 const IMAGE_HEIGHT = settings.preview['height']
 
 let imagesByType = {};
-const jsonCache = {};
+const nsfwCache = {};
 
 const typesToWatch = ["loras", "checkpoints", "vae"];
 
@@ -45,7 +45,7 @@ async function loadAllImages() {
           imagesByType[type][key] = {
             model: data[key]['safetensors'],
             info: data[key]['json'],
-            img: data[key]['image']['png'] || data[key]['image']['webp'] || data[key]['image']['jpeg'] || data[key]['image']['jpg']
+            img: data[key]['image']['png'] || data[key]['image']['webp'] || data[key]['image']['jpeg'] || data[key]['image']['jpg'] || data[key]['image']['png'],
           }; // сохраним ПОЛНЫЕ пути к данным
         }
       }
@@ -55,6 +55,7 @@ async function loadAllImages() {
       imagesByType[type] = {};
     }
   }
+
   console.log("[alazuka] Loaded previews:", imagesByType);
 }
 
@@ -74,23 +75,25 @@ async function addPreviewHandlers(item, images, imageHost) {
   const data = images[baseName];
   if (!data) return;
   const img = data['img']['path']
-  let isNSFW = data['img']['is_NSFW']
-  if (isNSFW === "undefined") {
-    let info = jsonCache[baseName] || null;
-    if (!info) {
-      try {
-        info = await (await fetch(`/alazuka/file/${data['info']}`)).json()
-        jsonCache[baseName] = info
-      }
-      catch (err) { console.warn(`[alazuka] Failed to load info for ${baseName}`, err) }
-    }
-    isNSFW = (await loadSettingsFromServer()).NFSW;
+  let isNSFW = nsfwCache[baseName] || data['img']['is_NSFW'] !== "undefined" ? data['img']['is_NSFW'] : null
+  if (isNSFW === null) {
+    try {
+      isNSFW = (await (await fetch(`/alazuka/file/${data['info']}`)).json())["Nsfw"]
+    } catch (err) { console.warn(`[alazuka] Failed to load info for ${baseName}`, err) }
   }
+  nsfwCache[baseName] = isNSFW
+  const showNSFW = (await loadSettingsFromServer()).NFSW;
+
+
 
   const show = () => {
     imageHost.src = `/alazuka/file/${img}`;
-      showImage(item, imageHost, isNSFW);
-  };
+    showImage(item, imageHost, (isNSFW && !showNSFW));
+    console.log(isNSFW)
+    console.log(showNSFW)
+    console.log(isNSFW && !showNSFW)
+  }
+
 
   const hide = () => {
     imageHost.remove();
