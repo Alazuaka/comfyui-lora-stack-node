@@ -1,17 +1,13 @@
 import { app } from "../../../scripts/app.js";
 import { $el } from "../../../scripts/ui.js";
-import { api } from "../../../scripts/api.js";
 import { loadSettingsFromServer } from "./alazuka.js";
 
 const settings = await loadSettingsFromServer();
 const IMAGE_WIDTH = settings.preview['width']
 const IMAGE_HEIGHT = settings.preview['height']
 
-console.log(IMAGE_WIDTH)
-
 let imagesByType = {};
 const jsonCache = {};
-
 
 const typesToWatch = ["loras", "checkpoints", "vae"];
 
@@ -40,7 +36,8 @@ function showImage(relativeToEl, imageEl, blur = false) {
 async function loadAllImages() {
   for (const type of typesToWatch) {
     try {
-      const data = await (await api.fetchApi(`/alazuka/files/${type}`)).json();
+      const data = await (await fetch(`/alazuka/files/${type}`)).json();
+      console.log(`data:`, data)
       imagesByType[type] = {};
       for (const key in data) {
         if (Object.prototype.hasOwnProperty.call(data, key)) {
@@ -48,17 +45,16 @@ async function loadAllImages() {
           imagesByType[type][key] = {
             model: data[key]['safetensors'],
             info: data[key]['json'],
-            img: data[key]['png'] || data[key]['webp'] || data[key]['jpeg'] || data[key]['jpg'] || data[key]['png'],
+            img: data[key]['image']['png'] || data[key]['image']['webp'] || data[key]['image']['jpeg'] || data[key]['image']['jpg']
           }; // сохраним ПОЛНЫЕ пути к данным
         }
       }
-      console.log(imagesByType)
+      console.log(`imagesByType:`, imagesByType)
     } catch (err) {
       console.warn(`[alazuka] Failed to load files for ${type}`, err);
       imagesByType[type] = {};
     }
   }
-
   console.log("[alazuka] Loaded previews:", imagesByType);
 }
 
@@ -77,25 +73,23 @@ async function addPreviewHandlers(item, images, imageHost) {
 
   const data = images[baseName];
   if (!data) return;
-  const img = data['img']
-  let info = jsonCache[baseName] || null;
-  if (!info) {
-    try {
-      info = await (await fetch(`/alazuka/file/${data['info']}`)).json()
-      jsonCache[baseName] = info
+  const img = data['img']['path']
+  let isNSFW = data['img']['is_NSFW']
+  if (isNSFW === "undefined") {
+    let info = jsonCache[baseName] || null;
+    if (!info) {
+      try {
+        info = await (await fetch(`/alazuka/file/${data['info']}`)).json()
+        jsonCache[baseName] = info
+      }
+      catch (err) { console.warn(`[alazuka] Failed to load info for ${baseName}`, err) }
     }
-    catch (err) { console.warn(`[alazuka] Failed to load info for ${baseName}`, err) }
+    isNSFW = (await loadSettingsFromServer()).NFSW;
   }
-
-  const showNSFW = (await loadSettingsFromServer()).NFSW;
 
   const show = () => {
     imageHost.src = `/alazuka/file/${img}`;
-    if (info.Nsfw && !showNSFW) {
-      showImage(item, imageHost, true);
-    } else {
-      showImage(item, imageHost, false);
-    }
+      showImage(item, imageHost, isNSFW);
   };
 
   const hide = () => {

@@ -1,7 +1,6 @@
 // === es_loraset.js — декораторный подход ===
 
 import { app } from "../../../scripts/app.js";
-import { api } from "../../../scripts/api.js";
 
 app.registerExtension({
   name: "alazuka.EsLoraSet",
@@ -82,7 +81,6 @@ app.registerExtension({
 
     async function buildGroupedLoraList() {
       const paths = await getLorasPath();
-      console.log(paths)
       const grouped = {}; // { base_model: [path1, path2, ...] }
 
       for (const path of paths) {

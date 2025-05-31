@@ -6,23 +6,172 @@
 # | `/alazuka/related/{type}/{basename}` | `GET` | Получить связанные файлы (preview, json и др.) |
 # | `/alazuka/savefile/{type}/{target}` | `POST` | Сохранить файл как превью или другой тип |
 
-
 import os
-import shutil
+import re
 import json
+import folder_paths
 
+from PIL import Image, ExifTags
 from aiohttp import web
 from server import PromptServer
-import folder_paths
-from folder_paths import get_directory_by_type, get_full_path, get_folder_paths
+from folder_paths import get_full_path
+
+# При необходимости можно вызвать register_endpoints здесь
+# или оставить как есть, если регистрация происходит через __init__.py
 
 
-def find_related_file(base_path, extensions):
-    for ext in extensions:
-        candidate = f"{base_path}.{ext}"
-        if os.path.isfile(candidate):
-            return candidate
-    return None
+
+def extract_metadata_from_media(filepath):
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext in ['.jpg', '.jpeg', '.png']:
+        return extract_universal_metadata(filepath)
+    else:
+        return {"error": f"Unsupported file type: {ext}"}
+
+def extract_universal_metadata(filepath):
+    metadata = {
+        "path": filepath,
+        "size": None,
+        "format": "JPEG" if filepath.lower().endswith(('.jpg', '.jpeg')) else "PNG",
+        "prompt": "",
+        "negative_prompt": "",
+        "workflow": "",
+        "parameters": {},
+        "is_NSFW": False
+    }
+
+    try:
+        with Image.open(filepath) as img:
+            metadata["size"] = img.size
+            
+            # Общая обработка для всех форматов
+            text_data = {}
+            if hasattr(img, '_getexif'):
+                exif_data = img._getexif() or {}
+                for tag, value in exif_data.items():
+                    tag_name = ExifTags.TAGS.get(tag, tag)
+                    if tag == 37510:  # UserComment
+                        try:
+                            if isinstance(value, bytes):
+                                value = value.decode('utf-16-be' if value.startswith(b'UNICODE\x00\x00') else 'utf-8', errors='ignore')
+                            text_data["UserComment"] = value
+                        except Exception as e:
+                            text_data["UserComment"] = f"Decode error: {str(e)}"
+            
+            # Для PNG и других форматов
+            if hasattr(img, 'info'):
+                for key, value in img.info.items():
+                    if isinstance(value, str):
+                        text_data[key] = value
+            
+            # Универсальный поиск параметров
+            search_text = "\n".join([str(v) for v in text_data.values()])
+            parse_any_metadata(search_text, metadata)
+            
+            # Проверка NSFW
+            metadata["is_NSFW"] = check_nsfw(metadata["prompt"])
+            
+            # Сохраняем все текстовые данные
+            metadata["text_data"] = text_data
+            
+    except Exception as e:
+        metadata["error"] = str(e)
+    
+    return metadata
+
+def parse_any_metadata(text, metadata):
+    """Улучшенный парсер для поиска параметров в любом месте текста"""
+    if not text:
+        return
+    
+    # Нормализация текста
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    
+    # Поиск негативного промпта (разные варианты написания)
+    neg_patterns = [
+        r"negative prompt:\s*(.*?)(?=\n\w+:|$)",
+        r"neg prompt:\s*(.*?)(?=\n\w+:|$)",
+        r"negative_prompt:\s*(.*?)(?=\n\w+:|$)"
+    ]
+    
+    for pattern in neg_patterns:
+        if match := re.search(pattern, text, re.IGNORECASE | re.DOTALL):
+            metadata["negative_prompt"] = match.group(1).strip()
+            break
+    
+    # Поиск основного промпта (берем текст до негативного промпта или весь текст)
+    if metadata["negative_prompt"]:
+        split_pos = text.lower().find("negative prompt")
+        metadata["prompt"] = text[:split_pos].strip()
+    else:
+        metadata["prompt"] = text.strip()
+    
+    # Поиск параметров генерации
+    param_patterns = {
+        "Steps": r"Steps:\s*(\d+)",
+        "Sampler": r"Sampler:\s*([^\n]+)",
+        "CFG scale": r"CFG scale:\s*([\d.]+)",
+        "Seed": r"Seed:\s*(\d+)",
+        "Size": r"Size:\s*(\d+x\d+)",
+        "Model": r"Model:\s*([^\n]+)",
+        "Model hash": r"Model hash:\s*([^\n]+)"
+    }
+    
+    workflow_parts = []
+    for name, pattern in param_patterns.items():
+        if match := re.search(pattern, text, re.IGNORECASE):
+            metadata["parameters"][name] = match.group(1).strip()
+            workflow_parts.append(f"{name}: {match.group(1).strip()}")
+    
+    if workflow_parts:
+        metadata["workflow"] = ", ".join(workflow_parts)
+
+def check_nsfw(text):
+    """Проверка текста на NSFW содержание (улучшенная версия)"""
+    if not text:
+        return False
+
+    nsfw_keywords = {
+        "cum", "bukkake", "nipple", "areola", "pussy", "anus", "asshole",
+        "deepthroat", "fisting", "blowjob", "gangbang", "tentacle", "bondage", 
+        "dildo", "vibrator", "orgasm", "penetration", "squirting", "cumshot",
+        "creampie", "felching", "rimjob", "rimming", "anal", "dp", "gaping",
+        "cock", "dick", "penis", "erection", "testicles", "scrotum", "glans",
+        "clitoris", "clit", "labia", "vulva", "uncensored", "nude", "nudity",
+        "masturbation", "fingering", "futa", "futanari", "shemale", "transgirl",
+        "cumdump", "slut", "whore", "escort", "prostitute"
+    }
+
+    # Нормализация текста: удаляем знаки пунктуации и приводим к нижнему регистру
+    normalized_text = re.sub(r'[^\w\s-]', '', text.lower())
+    
+    # Разбиваем на слова, включая составные (через дефис/подчёркивание)
+    words = set()
+    for word in re.findall(r'[\w-]+', normalized_text):
+        words.update(word.split('_'))  # Разбиваем snake_case
+        words.update(word.split('-'))  # Разбиваем kebab-case
+    
+    return any(keyword in words for keyword in nsfw_keywords)
+
+
+class UnicodeEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, str):
+            return obj
+        return super().default(obj)
+
+def bytes_to_str(obj):
+    if isinstance(obj, dict):
+        return {k: bytes_to_str(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [bytes_to_str(i) for i in obj]
+    elif isinstance(obj, bytes):
+        try:
+            return obj.decode('utf-8', errors='ignore')
+        except:
+            return str(obj)
+    else:
+        return obj   
 
 
 # Путь к файлу settings.json (родительская папка)
@@ -78,6 +227,7 @@ async def serve_file(request):
 
     return web.FileResponse(file_path)
 
+
 @PromptServer.instance.routes.get("/alazuka/files/{type}")
 async def get_grouped_files(request):
     type = request.match_info["type"]
@@ -91,18 +241,29 @@ async def get_grouped_files(request):
         for fname in os.listdir(folder):
             parts = fname.split(".")
             if len(parts) < 2:
-                continue  # Пропускаем файлы без расширений
+                continue
 
-            base_name = parts[0]  # Всё до первой точки
-            ext = parts[-1].lower()  # Всё после последней точки
-
+            base_name = parts[0]
+            ext = parts[-1].lower()
             full_path = os.path.join(folder, fname)
+
             if not os.path.isfile(full_path):
                 continue
 
             if base_name not in grouped:
-                grouped[base_name] = {}
+                grouped[base_name] = {"image": {}}
 
-            grouped[base_name][ext] = f"{type}/{fname}"
+            if ext in ('png', 'jpg', 'jpeg'):
+                meta_info = extract_metadata_from_media(full_path)
+                grouped[base_name]["image"][ext] = {
+                    "path": f"{type}/{fname}",
+                    "is_NSFW": meta_info.get("is_NSFW", False),
+                    "prompt": meta_info.get("prompt", ""),
+                    "negative_prompt": meta_info.get("negative_prompt", ""),
+                    "workflow": meta_info.get("workflow", ""),
+                    "meta_data": meta_info.get("exif", {}) or meta_info.get("text", {})
+                }
+            else:
+                grouped[base_name][ext] = f"{type}/{fname}"
 
     return web.json_response(grouped)
