@@ -110,7 +110,7 @@ app.registerExtension({
           grouped.Unknown.push(path);
         }
       }
-
+      console.log("grouped",grouped)
       // Собираем финальный отсортированный массив
       const sortedKeys = Object.keys(grouped).sort((a, b) => {
         if (a === "Unknown") return 1; // отправляем Unknown в конец
@@ -214,7 +214,6 @@ app.registerExtension({
         const json = await response.json();
 
         if (Array.isArray(json.TrainedWords)) {
-          console.log(json.TrainedWords)
           const trainedWords = (json.TrainedWords).join(", ")
           return trainedWords.trim();
         } else {

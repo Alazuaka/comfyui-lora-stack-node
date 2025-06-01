@@ -17,17 +17,13 @@ export async function saveSettingsToServer(data) {
 export async function loadSettingsFromServer() {
  try {
   const response = await fetch("/alazuka/file/settings/get");
-  console.log(response)
   const result = await response.json();
-  console.log("Loaded settings:", result);
-    console.log(result)
   return result;
  } catch (error) {
   console.error("Failed to load settings:", error);
   return {};
  }
 }
-console.log(app.sharedData)
 
 app.registerExtension({
  name: "alazuka",

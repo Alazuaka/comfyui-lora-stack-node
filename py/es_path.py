@@ -227,43 +227,68 @@ async def serve_file(request):
 
     return web.FileResponse(file_path)
 
-
 @PromptServer.instance.routes.get("/alazuka/files/{type}")
 async def get_grouped_files(request):
     type = request.match_info["type"]
     folders = folder_paths.get_folder_paths(type)
     grouped = {}
 
+    # Сначала находим все модели (safetensors, pt, ckpt и т.д.)
+    model_exts = {"safetensors", "pt", "ckpt", "bin", "pth"}  # можно расширить
+    image_exts = {"jpeg", "jpg", "png"}  # можно расширить
+
     for folder in folders:
         if not os.path.isdir(folder):
             continue
 
+        # Сканируем папку и группируем файлы
         for fname in os.listdir(folder):
-            parts = fname.split(".")
-            if len(parts) < 2:
-                continue
-
-            base_name = parts[0]
-            ext = parts[-1].lower()
             full_path = os.path.join(folder, fname)
-
             if not os.path.isfile(full_path):
                 continue
 
-            if base_name not in grouped:
-                grouped[base_name] = {"image": {}}
+            # Разделяем имя файла и расширение
+            if "." not in fname:
+                continue
+            base_part, ext = fname.rsplit(".", 1)
+            ext = ext.lower()
 
-            if ext in ('png', 'jpg', 'jpeg'):
-                meta_info = extract_metadata_from_media(full_path)
-                grouped[base_name]["image"][ext] = {
-                    "path": f"{type}/{fname}",
-                    "is_NSFW": meta_info.get("is_NSFW", False),
-                    "prompt": meta_info.get("prompt", ""),
-                    "negative_prompt": meta_info.get("negative_prompt", ""),
-                    "workflow": meta_info.get("workflow", ""),
-                    "meta_data": meta_info.get("exif", {}) or meta_info.get("text", {})
-                }
-            else:
-                grouped[base_name][ext] = f"{type}/{fname}"
+            # Если это модель — создаём запись
+            if ext in model_exts:
+                if base_part not in grouped:
+                    grouped[base_part] = {
+                        "model": f"{type}/{fname}",
+                        "image": {},
+                        "json": None
+                    }
+
+        # Теперь ищем связанные файлы (изображения и JSON)
+        for base_part in list(grouped.keys()):
+            # Ищем изображения (начинаются как base_part, заканчиваются на image_exts)
+            for fname in os.listdir(folder):
+                if not fname.startswith(base_part + "."):
+                    continue
+
+                full_path = os.path.join(folder, fname)
+                if not os.path.isfile(full_path):
+                    continue
+
+                # Проверяем расширение
+                _, ext = fname.rsplit(".", 1)
+                ext = ext.lower()
+
+                if ext in image_exts:
+                    meta_info = extract_metadata_from_media(full_path)
+                    grouped[base_part]["image"][ext] = {
+                        "path": f"{type}/{fname}",
+                        "is_NSFW": meta_info.get("is_NSFW", False),
+                        "prompt": meta_info.get("prompt", ""),
+                        "negative_prompt": meta_info.get("negative_prompt", ""),
+                        "workflow": meta_info.get("workflow", ""),
+                        "meta_data": meta_info.get("exif", {}) or meta_info.get("text", {})
+                    }
+
+                elif ext == "json":
+                    grouped[base_part]["json"] = f"{type}/{fname}"
 
     return web.json_response(grouped)

@@ -37,7 +37,6 @@ async function loadAllImages() {
   for (const type of typesToWatch) {
     try {
       const data = await (await fetch(`/alazuka/files/${type}`)).json();
-      console.log(`data:`, data)
       imagesByType[type] = {};
       for (const key in data) {
         if (Object.prototype.hasOwnProperty.call(data, key)) {
@@ -49,14 +48,11 @@ async function loadAllImages() {
           }; // сохраним ПОЛНЫЕ пути к данным
         }
       }
-      console.log(`imagesByType:`, imagesByType)
     } catch (err) {
       console.warn(`[alazuka] Failed to load files for ${type}`, err);
       imagesByType[type] = {};
     }
   }
-
-  console.log("[alazuka] Loaded previews:", imagesByType);
 }
 
 function detectTypeByWidgetName(widgetName) {
@@ -70,7 +66,9 @@ async function addPreviewHandlers(item, images, imageHost) {
   const text = item.getAttribute("data-value")?.trim();
   if (!text) return;
 
-  const baseName = text.split(".")[0]; // ключ = имя без расширения
+  const parts = text.split('.');
+  parts.pop(); // удаляем последний элемент (расширение)
+  const baseName = parts.join('.');
 
   const data = images[baseName];
   if (!data) return;
@@ -89,9 +87,6 @@ async function addPreviewHandlers(item, images, imageHost) {
   const show = () => {
     imageHost.src = `/alazuka/file/${img}`;
     showImage(item, imageHost, (isNSFW && !showNSFW));
-    console.log(isNSFW)
-    console.log(showNSFW)
-    console.log(isNSFW && !showNSFW)
   }
 
 
