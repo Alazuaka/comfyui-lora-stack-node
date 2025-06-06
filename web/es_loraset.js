@@ -110,7 +110,6 @@ app.registerExtension({
           grouped.Unknown.push(path);
         }
       }
-      console.log("grouped",grouped)
       // Собираем финальный отсортированный массив
       const sortedKeys = Object.keys(grouped).sort((a, b) => {
         if (a === "Unknown") return 1; // отправляем Unknown в конец

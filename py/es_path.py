@@ -292,3 +292,4 @@ async def get_grouped_files(request):
                     grouped[base_part]["json"] = f"{type}/{fname}"
 
     return web.json_response(grouped)
+
