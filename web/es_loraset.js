@@ -394,7 +394,7 @@ app.registerExtension({
                 (node, widgets, depth) => {
 
                   const widget = widgets[0]; // берём первый текстовый виджет
-                  const oldValue = widget.value;
+                  const oldValue = widget.value.trim();
                   if (!trigers) return
                   const newValue = `${oldValue}${oldValue.trim()[oldValue.trim().length - 1] === "," ? "" : ","} ${trigers[trigers.length - 1] === "," ? trigers : trigers + ","}`
 
@@ -470,7 +470,7 @@ app.registerExtension({
               (node, widgets, depth) => {
 
                 const widget = widgets[0]; // берём первый текстовый виджет
-                const oldValue = widget.value;
+                const oldValue = widget.value.trim();
 
                 const trigKeys = trigers.split(",")
                 const trigersSet = [];
