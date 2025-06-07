@@ -1,7 +1,7 @@
 from nodes import CheckpointLoaderSimple
 from folder_paths import get_filename_list
 
-class EsCheckpointSet(CheckpointLoaderSimple):
+class AlazukaCheckpoint(CheckpointLoaderSimple):
     @classmethod
     def INPUT_TYPES(cls):
         ckpts = get_filename_list("checkpoints")
@@ -21,9 +21,9 @@ class EsCheckpointSet(CheckpointLoaderSimple):
         return super().load_checkpoint(ckpt_name)
 
 NODE_CLASS_MAPPINGS = {
-    "EsCheckpointSet": EsCheckpointSet,
+    "AlazukaCheckpoint": AlazukaCheckpoint,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "EsCheckpointSet": "Checkpoint Set (Grouped) 🥒",
+    "AlazukaCheckpoint": "Load Checkpoint (Grouped) 🥒",
 }

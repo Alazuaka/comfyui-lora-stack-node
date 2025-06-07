@@ -1,6 +1,6 @@
 import { app } from "../../../scripts/app.js";
 import { $el } from "../../../scripts/ui.js";
-import { loadSettingsFromServer } from "./alazuka.js";
+import { loadSettingsFromServer } from "./alazuka_menu.js";
 
 const settings = await loadSettingsFromServer();
 const IMAGE_WIDTH = settings.preview['width']

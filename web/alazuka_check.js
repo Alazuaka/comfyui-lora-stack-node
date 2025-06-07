@@ -1,9 +1,9 @@
 import { app } from "../../../scripts/app.js";
 
 app.registerExtension({
-  name: "alazuka.EsCheckpointSet",
+  name: "alazuka.AlazukaCheckpoint",
   async nodeCreated(node) {
-    if (node.comfyClass !== "EsCheckpointSet") return;
+    if (node.comfyClass !== "AlazukaCheckpoint") return;
 
     const widget = node.widgets?.find(w => w.name === "ckpt_name");
     if (!widget) {
