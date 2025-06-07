@@ -1,7 +1,8 @@
 {
-    "NFSW": true,
     "preview": {
         "width": 384,
         "heigth": 384
-    }
+    },
+    "show preview": true,
+    "NSFW": false
 }

@@ -1,15 +1,20 @@
 import { app } from "../../../scripts/app.js";
 import { $el } from "../../../scripts/ui.js";
-import { loadSettingsFromServer } from "./alazuka_menu.js";
+import { loadSettingsFromServer, eventBus } from "./alazuka_assets.js";
 
 const settings = await loadSettingsFromServer();
-const IMAGE_WIDTH = settings.preview['width']
-const IMAGE_HEIGHT = settings.preview['height']
+const IMAGE_WIDTH = settings.preview['width'] || 384;
+const IMAGE_HEIGHT = settings.preview['height'] || 384;
+
+let showNSFW = settings.NSFW ?? true;
+let showPreview = settings["show preview"] ?? true;
+
 
 let imagesByType = {};
 const nsfwCache = {};
 
 const typesToWatch = ["loras", "checkpoints", "vae"];
+
 
 const calculateImagePosition = (el, bodyRect) => {
   let { top, left, right } = el.getBoundingClientRect();
@@ -80,14 +85,12 @@ async function addPreviewHandlers(item, images, imageHost) {
     } catch (err) { console.warn(`[alazuka] Failed to load info for ${baseName}`, err) }
   }
   nsfwCache[baseName] = isNSFW
-  const showNSFW = (await loadSettingsFromServer()).NFSW;
 
-
-
-  const show = () => {
-    imageHost.src = `/alazuka/file/${img}`;
-    showImage(item, imageHost, (isNSFW && !showNSFW));
-  }
+const show = () => {
+  if (!showPreview) return; // 💡 чек на глобальный флаг
+  imageHost.src = `/alazuka/file/${img}`;
+  showImage(item, imageHost, (isNSFW && !showNSFW));
+};
 
 
   const hide = () => {
@@ -104,8 +107,17 @@ async function addPreviewHandlers(item, images, imageHost) {
 app.registerExtension({
   name: "alazuka.PreviewUniversal",
   async init() {
-    const imageHost = $el("img.alazuka-combo-image");
+    eventBus
+      .add("toggle_NSFW", (state) => {
+        showNSFW = state.isEnabled;
+        console.log("[alazuka] NSFW updated to", showNSFW);
+      })
+      .add("toggle_preview", (state) => {
+        showPreview = state.isEnabled;
+        console.log("[alazuka] Preview enabled:", showPreview);
+      });
 
+    const imageHost = $el("img.alazuka-combo-image");
     await loadAllImages();
 
     $el("style", {

@@ -13,8 +13,6 @@ app.registerExtension({
 
     const values = await getGroupedCheckpoints();
 
-    console.log("📦 Загруженные значения для выпадающего списка:", values);
-
     widget.options.values = values;
     widget.value = "none";
 
@@ -31,22 +29,16 @@ app.registerExtension({
 
 async function getGroupedCheckpoints() {
   try {
-    console.log("📥 Загружаю список чекпоинтов...");
     const resp = await fetch("/alazuka/files/checkpoints");
     if (!resp.ok) throw new Error(`Не удалось получить список: ${resp.status} ${resp.statusText}`);
     const data = await resp.json();
-
-    console.log("📄 Ответ от сервера:", data);
 
     const grouped = {};
     let totalFound = 0;
 
     for (const [baseName, files] of Object.entries(data)) {
-      console.log(`📁 Чекпоинт: ${baseName}`, files);
-
       const modelPath = files.model;
       if (!modelPath || !modelPath.endsWith(".safetensors")) {
-        console.log(`❌ Пропущен ${baseName} — нет .safetensors`);
         continue;
       }
 
@@ -59,7 +51,6 @@ async function getGroupedCheckpoints() {
           const r = await fetch(`/alazuka/file/${jsonPath}`);
           if (r.ok) {
             const j = await r.json();
-            console.log(`🧠 JSON ${jsonPath}:`, j);
             if (typeof j.BaseModel === "string" && j.BaseModel.trim()) {
               baseModel = j.BaseModel.trim();
             }
@@ -91,8 +82,6 @@ async function getGroupedCheckpoints() {
     if (result.length === 1) {
       console.warn("⚠️ Список чекпоинтов пустой или содержит только 'none'");
     }
-
-    console.log("📦 Итоговый список чекпоинтов:", result);
 
     return result;
   } catch (e) {
